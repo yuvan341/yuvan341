@@ -1,0 +1,205 @@
+// warning.html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PhishGuard Security Warning</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8d7da;
+      color: #721c24;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      padding: 30px;
+      max-width: 650px;
+      text-align: center;
+    }
+    .warning-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #c5221f;
+      margin-bottom: 20px;
+    }
+    .url {
+      word-break: break-all;
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-family: monospace;
+    }
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 30px;
+    }
+    .buttons button {
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      border: none;
+    }
+    .back-button {
+      background-color: #4285f4;
+      color: white;
+    }
+    .proceed-button {
+      background-color: #f8f9fa;
+      color: #5f6368;
+      border: 1px solid #dadce0 !important;
+    }
+    #reasons {
+      text-align: left;
+      background-color: #fff4f4;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    .risk-meter {
+      height: 8px;
+      width: 100%;
+      background: linear-gradient(to right, #4caf50, #ffeb3b, #f44336);
+      border-radius: 4px;
+      margin: 20px 0;
+      position: relative;
+    }
+    .risk-indicator {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background-color: #333;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      top: 50%;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #5f6368;
+      border-top: 1px solid #dadce0;
+      padding-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="warning-icon">⚠️</div>
+    <h1>Phishing Threat Detected</h1>
+    
+    <p>PhishGuard has detected that this website likely contains phishing content designed to steal your personal information.</p>
+    
+    <p>You were trying to visit:</p>
+    <div class="url" id="destination-url"></div>
+    
+    <div id="risk-display">
+      <p>Risk assessment: <span id="risk-percentage">High</span></p>
+      <div class="risk-meter">
+        <div class="risk-indicator" id="risk-indicator" style="left: 90%"></div>
+      </div>
+    </div>
+    
+    <p>Reasons for blocking:</p>
+    <ul id="reasons">
+      <li>Analyzing threat details...</li>
+    </ul>
+    
+    <div class="buttons">
+      <button class="back-button" id="back-button">Return to Safety</button>
+      <button class="proceed-button" id="proceed-button">Proceed Despite Risk</button>
+    </div>
+    
+    <div class="footer">
+      <p>PhishGuard Advanced Security • Machine Learning Protection Active</p>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Get the URL from query parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const suspiciousUrl = urlParams.get('url');
+      
+      // Display the URL
+      const urlElement = document.getElementById('destination-url');
+      urlElement.textContent = suspiciousUrl || 'Unknown URL';
+      
+      // Get more details about why it was flagged
+      if (suspiciousUrl) {
+        chrome.runtime.sendMessage(
+          { action: "checkUrl", url: suspiciousUrl },
+          response => {
+            if (response) {
+              // Update risk meter
+              const riskPercentage = Math.round(response.riskScore * 100);
+              document.getElementById('risk-percentage').textContent = `${riskPercentage}%`;
+              document.getElementById('risk-indicator').style.left = `${riskPercentage}%`;
+              
+              // Show reasons
+              const reasonsList = document.getElementById('reasons');
+              reasonsList.innerHTML = '';
+              
+              if (response.reasons && response.reasons.length > 0) {
+                response.reasons.forEach(reason => {
+                  const li = document.createElement('li');
+                  li.textContent = reason;
+                  reasonsList.appendChild(li);
+                });
+              } else {
+                // Fallback reasons
+                reasonsList.innerHTML = `
+                  <li>This site matches patterns common to phishing websites</li>
+                  <li>The URL contains suspicious elements</li>
+                  <li>This site may attempt to steal your personal information</li>
+                `;
+              }
+              
+              // Send telemetry about warning display
+              chrome.runtime.sendMessage({
+                action: "sendTelemetry",
+                eventType: "warning_displayed",
+                metadata: {
+                  riskScore: response.riskScore,
+                  reasonCount: response.reasons?.length || 0
+                }
+              });
+            }
+          }
+        );
+      }
+      
+      // Set up button handlers
+      document.getElementById('back-button').addEventListener('click', function() {
+        window.history.back();
+      });
+      
+      document.getElementById('proceed-button').addEventListener('click', function() {
+        const proceedAnyway = confirm('WARNING: Proceeding to this site puts your personal information at extreme risk. Are you absolutely sure you want to continue?');
+        
+        if (proceedAnyway) {
+          // Send telemetry about user proceeding despite warning
+          chrome.runtime.sendMessage({
+            action: "sendTelemetry",
+            eventType: "warning_bypassed",
+            metadata: {}
+          });
+          
+          window.location.href = suspiciousUrl;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
